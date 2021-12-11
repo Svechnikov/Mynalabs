@@ -24,7 +24,6 @@ class CameraRecorder(
     previewSurface: Surface,
     frameSizeCallback: (Size) -> Size,
     private val onVideoRecorded: (path: String) -> Unit,
-    private val onRecordingProgressUpdated: (Int) -> Unit,
 ) {
 
     private val eglExecutor = Executors.newSingleThreadExecutor()

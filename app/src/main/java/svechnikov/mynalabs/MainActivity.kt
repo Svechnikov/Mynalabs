@@ -105,9 +105,6 @@ class MainActivity : AppCompatActivity() {
                 recordButton.isVisible = true
                 closeButton.isVisible = false
             }
-            State.Recording -> {
-
-            }
             is State.ShowingVideo -> {
                 recordButton.isVisible = false
                 closeButton.isVisible = true
@@ -157,7 +154,6 @@ class MainActivity : AppCompatActivity() {
             surface,
             ::adjustPreviewSize,
             ::onVideoRecorded,
-            ::onRecordingProgressUpdated,
         ).also { this.recorder = it }
 
         recorderTouchHandler = RecorderTouchHandler(recorder, vibrator)
@@ -182,10 +178,6 @@ class MainActivity : AppCompatActivity() {
             }
             it.prepareAsync()
         }
-    }
-
-    private fun onRecordingProgressUpdated(seconds: Int) {
-
     }
 
     private fun adjustPreviewSize(frameSize: Size): Size {
@@ -232,7 +224,6 @@ class MainActivity : AppCompatActivity() {
     private sealed class State {
         object RequestingPermissions : State()
         object ShowingPreview : State()
-        object Recording : State()
         data class ShowingVideo(val path: String) : State()
     }
 
