@@ -39,19 +39,19 @@ class CameraRecorder(
 
     private val transformMatrix = FloatArray(16)
 
-    private var videoProgram: CameraTextureProgram? = null
+    private var cameraProgram: CameraTextureProgram? = null
 
-    private var logo: Bitmap? = null
+    private var watermark: Bitmap? = null
 
     private var viewSize: Size? = null
 
     private var frameSize: Size? = null
 
-    private var cameraTexture: ExternalTexture? = null
+    private var cameraTexture: CameraTexture? = null
 
-    private var bitmapTexture: BitmapTexture? = null
+    private var watermarkTexture: WatermarkTexture? = null
 
-    private var bitmapProgram: BitmapTextureProgram? = null
+    private var watermarkProgram: WatermarkTextureProgram? = null
 
     private var startTime = 0L
 
@@ -77,7 +77,7 @@ class CameraRecorder(
                     activity,
                     WatermarkConfig.RESOURCE,
                 )!!.toBitmap().also {
-                    logo = it
+                    watermark = it
                 }
 
                 request.setTransformationInfoListener(eglExecutor) {
@@ -94,11 +94,11 @@ class CameraRecorder(
                         .createSurface(previewSurface)
                         .also(eglCore::makeCurrent)
 
-                    videoProgram = CameraTextureProgram()
-                    val texture = ExternalTexture().also { cameraTexture = it }
+                    cameraProgram = CameraTextureProgram()
+                    val texture = CameraTexture().also { cameraTexture = it }
 
-                    bitmapProgram = BitmapTextureProgram()
-                    bitmapTexture = BitmapTexture(logo)
+                    watermarkProgram = WatermarkTextureProgram()
+                    watermarkTexture = WatermarkTexture(logo)
 
                     cameraSurfaceTexture = SurfaceTexture(texture.texId).also {
                         it.setDefaultBufferSize(viewSize.width, viewSize.height)
@@ -126,7 +126,7 @@ class CameraRecorder(
             val previewSurface = previewEglSurface ?: return@execute
             val viewSize = viewSize ?: return@execute
             val texture = cameraTexture ?: return@execute
-            val bitmapTexture = bitmapTexture ?: return@execute
+            val bitmapTexture = watermarkTexture ?: return@execute
 
             surfaceTexture.updateTexImage()
             surfaceTexture.getTransformMatrix(transformMatrix)
@@ -134,7 +134,7 @@ class CameraRecorder(
             eglCore.makeCurrent(previewSurface)
             GLES20.glViewport(0, 0, viewSize.width, viewSize.height)
 
-            videoProgram?.draw(texture.texId, transformMatrix)
+            cameraProgram?.draw(texture.texId, transformMatrix)
             eglCore.swapBuffers(previewSurface)
 
             encoderEglSurface?.let {
@@ -154,8 +154,8 @@ class CameraRecorder(
                 GLES20.glViewport(0, 0, frameSize.width, frameSize.height)
                 GLES20.glEnable(GLES20.GL_BLEND)
                 GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA)
-                videoProgram?.draw(texture.texId, transformMatrix)
-                bitmapProgram?.draw(bitmapTexture.texId, alpha)
+                cameraProgram?.draw(texture.texId, transformMatrix)
+                watermarkProgram?.draw(bitmapTexture.texId, alpha)
                 GLES20.glDisable(GLES20.GL_BLEND)
                 encoder.process()
                 eglCore.setPresentationTime(it, surfaceTexture.timestamp)

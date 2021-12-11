@@ -1,13 +1,53 @@
 package svechnikov.mynalabs
 
-import android.opengl.GLES11Ext
+import android.graphics.Bitmap
 import android.opengl.GLES20
+import android.opengl.GLUtils
 import android.opengl.Matrix
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
 
-class CameraTextureProgram {
+class WatermarkTexture(bitmap: Bitmap) {
+
+    val texId: Int
+
+    init {
+        val textures = IntArray(1)
+        GLES20.glGenTextures(1, textures, 0)
+        Utils.checkGlError("glGenTextures")
+
+        texId = textures[0]
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texId)
+        Utils.checkGlError("glBindTexture $texId")
+
+        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0)
+
+        GLES20.glTexParameteri(
+            GLES20.GL_TEXTURE_2D,
+            GLES20.GL_TEXTURE_MIN_FILTER,
+            GLES20.GL_NEAREST,
+        )
+        GLES20.glTexParameteri(
+            GLES20.GL_TEXTURE_2D,
+            GLES20.GL_TEXTURE_MAG_FILTER,
+            GLES20.GL_LINEAR,
+        )
+        GLES20.glTexParameteri(
+            GLES20.GL_TEXTURE_2D,
+            GLES20.GL_TEXTURE_WRAP_S,
+            GLES20.GL_CLAMP_TO_EDGE,
+        )
+        GLES20.glTexParameteri(
+            GLES20.GL_TEXTURE_2D,
+            GLES20.GL_TEXTURE_WRAP_T,
+            GLES20.GL_CLAMP_TO_EDGE,
+        )
+        Utils.checkGlError("glTexParameter")
+    }
+}
+
+class WatermarkTextureProgram {
 
     private val program: Int
 
@@ -15,6 +55,7 @@ class CameraTextureProgram {
     private val uTexMatrixLoc: Int
     private val aPositionLoc: Int
     private val aTextureCoordLoc: Int
+    private val alphaLoc: Int
 
     init {
         val vertexShader = loadShader(GLES20.GL_VERTEX_SHADER, VERTEX_SHADER)
@@ -36,9 +77,14 @@ class CameraTextureProgram {
         aTextureCoordLoc = getAttribLocation("aTextureCoord")
         uMVPMatrixLoc = getUniformLocation("uMVPMatrix")
         uTexMatrixLoc = getUniformLocation("uTexMatrix")
+        alphaLoc = getUniformLocation("alpha")
+
+        val textures = IntArray(1)
+        GLES20.glGenTextures(1, textures, 0)
+        Utils.checkGlError("glGenTextures")
     }
 
-    fun draw(texId: Int, transformMatrix: FloatArray) {
+    fun draw(texId: Int, alpha: Float) {
         Utils.checkGlError("draw start")
 
         // Select the program.
@@ -47,15 +93,19 @@ class CameraTextureProgram {
 
         // Set the texture.
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, texId)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texId)
 
         // Copy the model / view / projection matrix over.
         GLES20.glUniformMatrix4fv(uMVPMatrixLoc, 1, false, IDENTITY_MATRIX, 0)
         Utils.checkGlError("glUniformMatrix4fv")
 
         // Copy the texture transformation matrix over.
-        GLES20.glUniformMatrix4fv(uTexMatrixLoc, 1, false, transformMatrix, 0)
+        GLES20.glUniformMatrix4fv(uTexMatrixLoc, 1, false, IDENTITY_MATRIX, 0)
         Utils.checkGlError("glUniformMatrix4fv")
+
+        // Copy the texture transformation matrix over.
+        GLES20.glUniform1f(alphaLoc, alpha)
+        Utils.checkGlError("glUniform1f")
 
         // Enable the "aPosition" vertex attribute.
         GLES20.glEnableVertexAttribArray(aPositionLoc)
@@ -64,7 +114,8 @@ class CameraTextureProgram {
         // Connect vertexBuffer to "aPosition".
         GLES20.glVertexAttribPointer(
             aPositionLoc, 2,
-            GLES20.GL_FLOAT, false, 2 * SIZE_OF_FLOAT, VERTEX_BUFFER)
+            GLES20.GL_FLOAT, false, 2 * Utils.SIZE_OF_FLOAT, VERTEX_BUFFER
+        )
         Utils.checkGlError("glVertexAttribPointer")
 
         // Enable the "aTextureCoord" vertex attribute.
@@ -74,7 +125,7 @@ class CameraTextureProgram {
         // Connect texBuffer to "aTextureCoord".
         GLES20.glVertexAttribPointer(
             aTextureCoordLoc, 2,
-            GLES20.GL_FLOAT, false, 2 * SIZE_OF_FLOAT, TEX_BUFFER
+            GLES20.GL_FLOAT, false, 2 * Utils.SIZE_OF_FLOAT, TEX_BUFFER
         )
         Utils.checkGlError("glVertexAttribPointer")
 
@@ -85,7 +136,7 @@ class CameraTextureProgram {
         // Done -- disable vertex array, texture, and program.
         GLES20.glDisableVertexAttribArray(aPositionLoc)
         GLES20.glDisableVertexAttribArray(aTextureCoordLoc)
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
         GLES20.glUseProgram(0)
     }
 
@@ -134,16 +185,16 @@ class CameraTextureProgram {
             """
 
         const val FRAGMENT_SHADER = """
-            #extension GL_OES_EGL_image_external : require
             precision mediump float;
             varying vec2 vTextureCoord;
-            uniform samplerExternalOES sTexture;
+            uniform sampler2D sTexture;
+            uniform float alpha;
             void main() {
-                gl_FragColor = texture2D(sTexture, vTextureCoord);
-            }
-            """
-
-        const val SIZE_OF_FLOAT = 4
+                vec4 tc = texture2D(sTexture, vTextureCoord);
+                if(tc.a == 0.0)
+                    discard;
+                gl_FragColor = vec4(tc.rgb, alpha);
+            }"""
 
         val IDENTITY_MATRIX = FloatArray(16).apply {
             Matrix.setIdentityM(this, 0)
@@ -151,10 +202,10 @@ class CameraTextureProgram {
 
         val VERTEX_BUFFER = createBuffer(
             floatArrayOf(
-                -1.0f, -1.0f, // 0 bottom left
-                1.0f, -1.0f, // 1 bottom right
-                -1.0f, 1.0f, // 2 top left
-                1.0f, 1.0f, // 3 top right
+                -0.8f, 0.8f, // left top
+                0.8f, 0.8f, // right top
+                -0.8f, -0.8f, // left bottom
+                0.8f, -0.8f, // right bottom
             )
         )
 
@@ -168,7 +219,7 @@ class CameraTextureProgram {
         )
 
         fun createBuffer(coords: FloatArray): FloatBuffer = ByteBuffer.allocateDirect(
-            coords.size * SIZE_OF_FLOAT,
+            coords.size * Utils.SIZE_OF_FLOAT,
         ).run {
             order(ByteOrder.nativeOrder())
             val fb = asFloatBuffer()
