@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import java.io.File
 import java.util.concurrent.Executors
+import kotlin.math.sin
 
 @ExperimentalUseCaseGroup
 class CameraRecorder(
@@ -59,10 +60,6 @@ class CameraRecorder(
 
     private var startTime = 0L
 
-    private val blinkPeriod = 2000f
-
-    private val blinkIntensity = 0.5f
-
     private var encoder: Encoder? = null
 
     private var encoderEglSurface: EGLSurface? = null
@@ -81,7 +78,10 @@ class CameraRecorder(
                     request.willNotProvideSurface()
                     return@setSurfaceProvider
                 }
-                val logo = ContextCompat.getDrawable(activity, R.drawable.logo)!!.toBitmap().also {
+                val logo = ContextCompat.getDrawable(
+                    activity,
+                    LogoConfig.LOGO_RESOURCE,
+                )!!.toBitmap().also {
                     logo = it
                 }
 
@@ -158,14 +158,9 @@ class CameraRecorder(
                 startTime = System.currentTimeMillis()
             }
             val timeSinceStart = System.currentTimeMillis() - startTime
-            val halfPeriod = blinkPeriod / 2
+            val halfPeriod = LogoConfig.BLINK_PERIOD / 2
             val progress = (timeSinceStart % halfPeriod) / halfPeriod
-
-            val alpha = if ((timeSinceStart / blinkPeriod).toInt() % 2 == 0) {
-                1 - blinkIntensity * progress
-            } else {
-                1 - blinkIntensity + blinkIntensity * progress
-            }
+            val alpha = 1 - LogoConfig.BLINK_INTENSITY * sin(progress * Math.PI).toFloat()
 
             surfaceTexture.updateTexImage()
             surfaceTexture.getTransformMatrix(transformMatrix)
