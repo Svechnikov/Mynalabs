@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import java.io.File
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.math.sin
 
 @ExperimentalUseCaseGroup
@@ -24,6 +25,7 @@ class CameraRecorder(
     previewSurface: Surface,
     frameSizeCallback: (Size) -> Size,
     private val onVideoRecorded: (path: String) -> Unit,
+    private val onRecordingProgressUpdated: (Int) -> Unit,
 ) {
 
     private val eglExecutor = Executors.newSingleThreadExecutor()
@@ -74,7 +76,7 @@ class CameraRecorder(
             val preview = Preview.Builder().build()
 
             preview.setSurfaceProvider(eglExecutor) { request ->
-                if (destroyed) {
+                if (eglExecutor.isShutdown) {
                     request.willNotProvideSurface()
                     return@setSurfaceProvider
                 }
@@ -140,12 +142,13 @@ class CameraRecorder(
                 .requireLensFacing(CameraSelector.LENS_FACING_FRONT)
                 .build()
 
+            cameraProvider.unbindAll()
             cameraProvider.bindToLifecycle(activity, selector, preview)
         }, ContextCompat.getMainExecutor(activity))
     }
 
     private fun onFrameAvailable(surfaceTexture: SurfaceTexture) {
-        if (destroyed) {
+        if (eglExecutor.isShutdown) {
             return
         }
         eglExecutor.execute {
@@ -209,7 +212,12 @@ class CameraRecorder(
 
     fun destroy() {
         destroyed = true
-        previewEglSurface = null
+        eglExecutor.execute {
+            previewEglSurface?.let(eglCore::releaseSurface)
+            eglCore.release()
+        }
         eglExecutor.shutdown()
+        eglExecutor.awaitTermination(2, TimeUnit.SECONDS)
+        previewEglSurface = null
     }
 }

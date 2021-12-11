@@ -2,6 +2,8 @@ package svechnikov.mynalabs
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Bundle
 import android.util.Size
 import android.view.Surface
@@ -12,9 +14,10 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.ExperimentalUseCaseGroup
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
+import java.io.IOException
 import kotlin.math.min
 import kotlin.math.round
 
@@ -27,18 +30,27 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var surfaceView: SurfaceView
 
-    private var previewSurface: Surface? = null
+    private var surface: Surface? = null
+
+    private var state: State = State.RequestingPermissions
+
+    private lateinit var recordButton: View
+
+    private lateinit var closeButton: View
+
+    private var mediaPlayer: MediaPlayer? = null
 
     private val previewSurfaceCallback = object : SurfaceHolder.Callback {
         override fun surfaceCreated(holder: SurfaceHolder) {
-            previewSurface = holder.surface
-            startCameraIfPossible()
+            surface = holder.surface
+            checkSurfaceAndPermissions()
         }
 
         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         }
 
         override fun surfaceDestroyed(holder: SurfaceHolder) {
+            surface = null
         }
     }
 
@@ -46,7 +58,13 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        findViewById<View>(R.id.record).setOnTouchListener { _, event ->
+        closeButton = findViewById(R.id.close)
+        closeButton.setOnClickListener {
+            state = State.ShowingPreview
+            applyState()
+        }
+        recordButton = findViewById(R.id.record)
+        recordButton.setOnTouchListener { _, event ->
             recorderTouchHandler?.processEvent(event)
             true
         }
@@ -54,14 +72,45 @@ class MainActivity : AppCompatActivity() {
         surfaceView.holder.addCallback(previewSurfaceCallback)
     }
 
+    private fun checkSurfaceAndPermissions() {
+        if (allPermissionsGranted() && surface != null) {
+            if (state == State.RequestingPermissions) {
+                state = State.ShowingPreview
+            }
+            applyState()
+        }
+    }
+
+    private fun applyState() {
+        updateUi()
+        when (state) {
+            State.ShowingPreview -> startCamera()
+            is State.ShowingVideo -> startVideoPlayback()
+        }
+    }
+
     override fun onStart() {
         super.onStart()
 
-        if (allPermissionsGranted()) {
-            startCameraIfPossible()
-        } else {
-            ActivityCompat.requestPermissions(
-                this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
+        checkSurfaceAndPermissions()
+    }
+
+    private fun updateUi() {
+        when (state) {
+            State.ShowingPreview -> {
+                recordButton.isVisible = true
+                closeButton.isVisible = false
+            }
+            State.Recording -> {
+
+            }
+            is State.ShowingVideo -> {
+                recordButton.isVisible = false
+                closeButton.isVisible = true
+            }
+            else -> {
+
+            }
         }
     }
 
@@ -73,7 +122,7 @@ class MainActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_CODE_PERMISSIONS) {
             if (allPermissionsGranted()) {
-                startCameraIfPossible()
+                checkSurfaceAndPermissions()
             } else {
                 Toast.makeText(this,
                     "Permissions not granted by the user.",
@@ -84,25 +133,55 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startCameraIfPossible() {
-        if (!allPermissionsGranted()) {
-            return
+    private fun releasePlayer() {
+        try {
+            mediaPlayer?.setSurface(null)
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+        } catch (e: IOException) {
+            e.printStackTrace()
         }
+        mediaPlayer = null
+    }
 
-        val surface = previewSurface ?: return
+    private fun startCamera() {
+        releasePlayer()
+
+        val surface = surface ?: return
         val recorder = CameraRecorder(
             this,
             surface,
             ::adjustPreviewSize,
             ::onVideoRecorded,
+            ::onRecordingProgressUpdated,
         ).also { this.recorder = it }
 
         recorderTouchHandler = RecorderTouchHandler(recorder)
     }
 
-    private fun onVideoRecorded(path: String) {
+    private fun onVideoRecorded(path: String) = runOnUiThread {
         recorder?.destroy()
         recorder = null
+        state = State.ShowingVideo(path)
+        applyState()
+    }
+
+    private fun startVideoPlayback() {
+        val state = state as? State.ShowingVideo ?: return
+
+        mediaPlayer = MediaPlayer().also {
+            it.setDataSource(this, Uri.parse(state.path))
+            it.isLooping = true
+            it.setSurface(surface)
+            it.setOnPreparedListener {
+                it.start()
+            }
+            it.prepareAsync()
+        }
+    }
+
+    private fun onRecordingProgressUpdated(seconds: Int) {
+
     }
 
     private fun adjustPreviewSize(frameSize: Size): Size {
@@ -135,6 +214,8 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
 
+        releasePlayer()
+
         recorder?.destroy()
         recorder = null
     }
@@ -142,6 +223,13 @@ class MainActivity : AppCompatActivity() {
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(
             baseContext, it) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private sealed class State {
+        object RequestingPermissions : State()
+        object ShowingPreview : State()
+        object Recording : State()
+        data class ShowingVideo(val path: String) : State()
     }
 
     private companion object {

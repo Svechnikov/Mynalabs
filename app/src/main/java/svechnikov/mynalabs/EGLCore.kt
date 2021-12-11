@@ -39,6 +39,20 @@ class EGLCore {
         0,
     ).also { checkError() }
 
+    fun releaseSurface(surface: EGLSurface) = EGL14.eglDestroySurface(display, surface)
+
+    fun release() {
+        EGL14.eglMakeCurrent(
+            display,
+            EGL14.EGL_NO_SURFACE,
+            EGL14.EGL_NO_SURFACE,
+            EGL14.EGL_NO_CONTEXT,
+        )
+        EGL14.eglDestroyContext(display, context)
+        EGL14.eglReleaseThread()
+        EGL14.eglTerminate(display)
+    }
+
     fun makeCurrent(surface: EGLSurface) {
         if (!EGL14.eglMakeCurrent(display, surface, surface, context)) {
             throw RuntimeException()

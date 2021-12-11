@@ -14,4 +14,11 @@
         android:background="@drawable/record"
         android:layout_width="50dp"
         android:layout_height="50dp" />
+    <View
+        android:id="@+id/close"
+        android:layout_gravity="center_horizontal|bottom"
+        android:layout_marginBottom="30dp"
+        android:background="@drawable/close"
+        android:layout_width="50dp"
+        android:layout_height="50dp" />
 </FrameLayout>
