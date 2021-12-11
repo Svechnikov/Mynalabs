@@ -128,15 +128,6 @@ class CameraRecorder(
             val texture = cameraTexture ?: return@execute
             val bitmapTexture = bitmapTexture ?: return@execute
 
-            if (startTime == 0L) {
-                startTime = System.currentTimeMillis()
-            }
-            val timeSinceStart = System.currentTimeMillis() - startTime
-            val period = 1 / WatermarkConfig.PULSE_FREQUENCY * 1000
-            val halfPeriod = period / 2
-            val progress = (timeSinceStart % halfPeriod) / halfPeriod
-            val alpha = 1 - WatermarkConfig.PULSE_AMPLITUDE * sin(progress * Math.PI).toFloat()
-
             surfaceTexture.updateTexImage()
             surfaceTexture.getTransformMatrix(transformMatrix)
 
@@ -149,6 +140,15 @@ class CameraRecorder(
             encoderEglSurface?.let {
                 val frameSize = frameSize ?: return@let
                 val encoder = encoder ?: return@let
+
+                if (startTime == 0L) {
+                    startTime = System.currentTimeMillis()
+                }
+                val timeSinceStart = System.currentTimeMillis() - startTime
+                val period = 1 / WatermarkConfig.PULSE_FREQUENCY * 1000
+                val halfPeriod = period / 2
+                val progress = (timeSinceStart % halfPeriod) / halfPeriod
+                val alpha = 1 - WatermarkConfig.PULSE_AMPLITUDE * sin(progress * Math.PI).toFloat()
 
                 eglCore.makeCurrent(it)
                 GLES20.glViewport(0, 0, frameSize.width, frameSize.height)
@@ -178,6 +178,7 @@ class CameraRecorder(
         eglExecutor.execute {
             encoder?.shutdown()
             encoder = null
+            startTime = 0L
             onVideoRecorded(filePath)
         }
     }
