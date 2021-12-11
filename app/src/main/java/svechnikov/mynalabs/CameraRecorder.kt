@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
 import android.opengl.EGLSurface
 import android.opengl.GLES20
-import android.opengl.Matrix
 import android.util.Size
 import android.view.Surface
 import androidx.appcompat.app.AppCompatActivity
@@ -52,12 +51,6 @@ class CameraRecorder(
 
     private var bitmapTexture: BitmapTexture? = null
 
-    private val displayProjectionMatrix = FloatArray(16)
-
-    private val bitmapLocationMatrix = FloatArray(16)
-
-    private val bitmapFinalLocationMatrix = FloatArray(16)
-
     private var bitmapProgram: BitmapTextureProgram? = null
 
     private var startTime = 0L
@@ -96,28 +89,6 @@ class CameraRecorder(
                     val viewSize = frameSizeCallback(size).also { this.viewSize = it }
 
                     frameSize = size
-
-                    Matrix.orthoM(
-                        displayProjectionMatrix,
-                        0,
-                        0f,
-                        viewSize.width.toFloat(),
-                        0f,
-                        viewSize.height.toFloat(),
-                        -1f,
-                        1f
-                    )
-
-                    Matrix.setIdentityM(bitmapLocationMatrix, 0)
-
-                    Matrix.multiplyMM(
-                        bitmapFinalLocationMatrix,
-                        0,
-                        displayProjectionMatrix,
-                        0,
-                        bitmapLocationMatrix,
-                        0
-                    )
 
                     previewEglSurface = eglCore
                         .createSurface(previewSurface)
