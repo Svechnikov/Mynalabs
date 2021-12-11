@@ -75,7 +75,7 @@ class CameraRecorder(
                 }
                 val logo = ContextCompat.getDrawable(
                     activity,
-                    LogoConfig.LOGO_RESOURCE,
+                    WatermarkConfig.RESOURCE,
                 )!!.toBitmap().also {
                     logo = it
                 }
@@ -132,9 +132,10 @@ class CameraRecorder(
                 startTime = System.currentTimeMillis()
             }
             val timeSinceStart = System.currentTimeMillis() - startTime
-            val halfPeriod = LogoConfig.BLINK_PERIOD / 2
+            val period = 1 / WatermarkConfig.PULSE_FREQUENCY * 1000
+            val halfPeriod = period / 2
             val progress = (timeSinceStart % halfPeriod) / halfPeriod
-            val alpha = 1 - LogoConfig.BLINK_INTENSITY * sin(progress * Math.PI).toFloat()
+            val alpha = 1 - WatermarkConfig.PULSE_AMPLITUDE * sin(progress * Math.PI).toFloat()
 
             surfaceTexture.updateTexImage()
             surfaceTexture.getTransformMatrix(transformMatrix)
