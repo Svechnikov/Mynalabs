@@ -40,6 +40,8 @@ class MainActivity : AppCompatActivity() {
 
     private var mediaPlayer: MediaPlayer? = null
 
+    private lateinit var vibrator: Vibrator
+
     private val previewSurfaceCallback = object : SurfaceHolder.Callback {
         override fun surfaceCreated(holder: SurfaceHolder) {
             surface = holder.surface
@@ -58,8 +60,10 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        vibrator = Vibrator(this)
         closeButton = findViewById(R.id.close)
         closeButton.setOnClickListener {
+            vibrator.vibrate()
             state = State.ShowingPreview
             applyState()
         }
@@ -156,7 +160,7 @@ class MainActivity : AppCompatActivity() {
             ::onRecordingProgressUpdated,
         ).also { this.recorder = it }
 
-        recorderTouchHandler = RecorderTouchHandler(recorder)
+        recorderTouchHandler = RecorderTouchHandler(recorder, vibrator)
     }
 
     private fun onVideoRecorded(path: String) = runOnUiThread {
