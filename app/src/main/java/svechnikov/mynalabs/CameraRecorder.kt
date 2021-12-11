@@ -24,6 +24,7 @@ class CameraRecorder(
     previewSurface: Surface,
     frameSizeCallback: (Size) -> Size,
     private val onVideoRecorded: (path: String) -> Unit,
+    private val onTooShortVideo: () -> Unit,
 ) {
 
     private val eglExecutor = Executors.newSingleThreadExecutor()
@@ -140,9 +141,6 @@ class CameraRecorder(
                 val frameSize = frameSize ?: return@let
                 val encoder = encoder ?: return@let
 
-                if (startTime == 0L) {
-                    startTime = System.currentTimeMillis()
-                }
                 val timeSinceStart = System.currentTimeMillis() - startTime
                 val period = 1 / WatermarkConfig.PULSE_FREQUENCY * 1000
                 val halfPeriod = period / 2
@@ -166,6 +164,7 @@ class CameraRecorder(
     fun start() {
         val frameSize = frameSize ?: return
 
+        startTime = System.currentTimeMillis()
         Encoder(filePath, frameSize.width, frameSize.height).also {
             encoderEglSurface = eglCore.createSurface(it.surface)
 
@@ -177,8 +176,14 @@ class CameraRecorder(
         eglExecutor.execute {
             encoder?.shutdown()
             encoder = null
+            val duration = System.currentTimeMillis() - startTime
+            if (duration > 2000) {
+                onVideoRecorded(filePath)
+            } else {
+                encoderEglSurface = null
+                onTooShortVideo()
+            }
             startTime = 0L
-            onVideoRecorded(filePath)
         }
     }
 

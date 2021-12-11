@@ -81,11 +81,18 @@ class Encoder(private val path: String, width: Int, height: Int) {
         shutdown = true
         executor.shutdown()
         executor.awaitTermination(2, TimeUnit.SECONDS)
-        muxer?.stop()
-        muxer?.release()
-        encoder.stop()
-        encoder.release()
-
+        try {
+            muxer?.stop()
+            muxer?.release()
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+        try {
+            encoder.stop()
+            encoder.release()
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
     }
 
     private companion object {

@@ -6,10 +6,7 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
 import android.util.Size
-import android.view.Surface
-import android.view.SurfaceHolder
-import android.view.SurfaceView
-import android.view.View
+import android.view.*
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -154,9 +151,21 @@ class MainActivity : AppCompatActivity() {
             surface,
             ::adjustPreviewSize,
             ::onVideoRecorded,
+            ::onTooShortVideo,
         ).also { this.recorder = it }
 
         recorderTouchHandler = RecorderTouchHandler(recorder, vibrator)
+    }
+
+    private fun onTooShortVideo() = runOnUiThread {
+        Toast.makeText(
+            this,
+            "Try holding your finger at least for a couple of seconds",
+            Toast.LENGTH_SHORT,
+        ).apply {
+            setGravity(Gravity.TOP, 0, 0)
+            show()
+        }
     }
 
     private fun onVideoRecorded(path: String) = runOnUiThread {
