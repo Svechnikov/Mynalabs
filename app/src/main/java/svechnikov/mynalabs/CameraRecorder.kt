@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
 import android.opengl.EGLSurface
 import android.opengl.GLES20
+import android.opengl.Matrix
 import android.util.Size
 import android.view.Surface
 import androidx.appcompat.app.AppCompatActivity
@@ -13,6 +14,7 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
+import java.io.File
 import java.util.concurrent.Executors
 
 @ExperimentalUseCaseGroup
@@ -20,6 +22,7 @@ class CameraRecorder(
     activity: AppCompatActivity,
     previewSurface: Surface,
     frameSizeCallback: (Size) -> Size,
+    private val onVideoRecorded: (path: String) -> Unit,
 ) {
 
     private val eglExecutor = Executors.newSingleThreadExecutor()
@@ -30,19 +33,41 @@ class CameraRecorder(
 
     private val eglCore = EGLCore()
 
-    private var cameraTexture: SurfaceTexture? = null
-
     private var previewEglSurface: EGLSurface? = null
 
     private val transformMatrix = FloatArray(16)
 
-    private var textureProgram: TextureProgram? = null
+    private var videoProgram: CameraTextureProgram? = null
 
     private var logo: Bitmap? = null
 
     private var viewSize: Size? = null
 
     private var frameSize: Size? = null
+
+    private var cameraTexture: ExternalTexture? = null
+
+    private var bitmapTexture: BitmapTexture? = null
+
+    private val displayProjectionMatrix = FloatArray(16)
+
+    private val bitmapLocationMatrix = FloatArray(16)
+
+    private val bitmapFinalLocationMatrix = FloatArray(16)
+
+    private var bitmapProgram: BitmapTextureProgram? = null
+
+    private var startTime = 0L
+
+    private val blinkPeriod = 2000f
+
+    private val blinkIntensity = 0.5f
+
+    private var encoder: Encoder? = null
+
+    private var encoderEglSurface: EGLSurface? = null
+
+    private val filePath = File(activity.filesDir, "video.mp4").absolutePath
 
     init {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(activity)
@@ -56,8 +81,9 @@ class CameraRecorder(
                     request.willNotProvideSurface()
                     return@setSurfaceProvider
                 }
-
-                logo = ContextCompat.getDrawable(activity, R.drawable.logo)!!.toBitmap()
+                val logo = ContextCompat.getDrawable(activity, R.drawable.logo)!!.toBitmap().also {
+                    logo = it
+                }
 
                 request.setTransformationInfoListener(eglExecutor) {
                     val size = if (it.rotationDegrees == 90 || it.rotationDegrees == 270) {
@@ -67,12 +93,41 @@ class CameraRecorder(
                     }
                     val viewSize = frameSizeCallback(size).also { this.viewSize = it }
 
+                    frameSize = size
+
+                    Matrix.orthoM(
+                        displayProjectionMatrix,
+                        0,
+                        0f,
+                        viewSize.width.toFloat(),
+                        0f,
+                        viewSize.height.toFloat(),
+                        -1f,
+                        1f
+                    )
+
+                    Matrix.setIdentityM(bitmapLocationMatrix, 0)
+
+                    Matrix.multiplyMM(
+                        bitmapFinalLocationMatrix,
+                        0,
+                        displayProjectionMatrix,
+                        0,
+                        bitmapLocationMatrix,
+                        0
+                    )
+
                     previewEglSurface = eglCore
                         .createSurface(previewSurface)
                         .also(eglCore::makeCurrent)
 
-                    val textureProgram = TextureProgram().also { this.textureProgram = it }
-                    cameraSurfaceTexture = SurfaceTexture(textureProgram.texId).also {
+                    videoProgram = CameraTextureProgram()
+                    val texture = ExternalTexture().also { cameraTexture = it }
+
+                    bitmapProgram = BitmapTextureProgram()
+                    bitmapTexture = BitmapTexture(logo)
+
+                    cameraSurfaceTexture = SurfaceTexture(texture.texId).also {
                         it.setDefaultBufferSize(viewSize.width, viewSize.height)
                         it.setOnFrameAvailableListener(::onFrameAvailable)
                     }
@@ -96,28 +151,68 @@ class CameraRecorder(
         eglExecutor.execute {
             val previewSurface = previewEglSurface ?: return@execute
             val viewSize = viewSize ?: return@execute
+            val texture = cameraTexture ?: return@execute
+            val bitmapTexture = bitmapTexture ?: return@execute
+
+            if (startTime == 0L) {
+                startTime = System.currentTimeMillis()
+            }
+            val timeSinceStart = System.currentTimeMillis() - startTime
+            val halfPeriod = blinkPeriod / 2
+            val progress = (timeSinceStart % halfPeriod) / halfPeriod
+
+            val alpha = if ((timeSinceStart / blinkPeriod).toInt() % 2 == 0) {
+                1 - blinkIntensity * progress
+            } else {
+                1 - blinkIntensity + blinkIntensity * progress
+            }
 
             surfaceTexture.updateTexImage()
             surfaceTexture.getTransformMatrix(transformMatrix)
 
             eglCore.makeCurrent(previewSurface)
             GLES20.glViewport(0, 0, viewSize.width, viewSize.height)
-            textureProgram?.draw(transformMatrix)
 
+            GLES20.glEnable(GLES20.GL_BLEND)
+            GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+            videoProgram?.draw(texture.texId, transformMatrix)
+            bitmapProgram?.draw(bitmapTexture.texId, alpha)
+            GLES20.glDisable(GLES20.GL_BLEND)
             eglCore.swapBuffers(previewSurface)
+
+            encoderEglSurface?.let {
+                val frameSize = frameSize ?: return@let
+                val encoder = encoder ?: return@let
+
+                eglCore.makeCurrent(it)
+                GLES20.glViewport(0, 0, frameSize.width, frameSize.height)
+                videoProgram?.draw(texture.texId, transformMatrix)
+                encoder.process()
+                eglCore.setPresentationTime(it, surfaceTexture.timestamp)
+                eglCore.swapBuffers(it)
+            }
         }
     }
 
     fun start() {
-        println("recorder start")
+        val frameSize = frameSize ?: return
+
+        Encoder(filePath, frameSize.width, frameSize.height).also {
+            encoderEglSurface = eglCore.createSurface(it.surface)
+
+            encoder = it
+        }
     }
 
     fun stop() {
-        println("recorder stop")
+        eglExecutor.execute {
+            encoder?.shutdown()
+            encoder = null
+            onVideoRecorded(filePath)
+        }
     }
 
     fun destroy() {
-        println("recorder destroy")
         destroyed = true
         previewEglSurface = null
         eglExecutor.shutdown()

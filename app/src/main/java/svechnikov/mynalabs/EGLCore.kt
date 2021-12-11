@@ -1,9 +1,6 @@
 package svechnikov.mynalabs
 
-import android.opengl.EGL14
-import android.opengl.EGLConfig
-import android.opengl.EGLContext
-import android.opengl.EGLSurface
+import android.opengl.*
 
 class EGLCore {
 
@@ -47,6 +44,9 @@ class EGLCore {
             throw RuntimeException()
         }
     }
+
+    fun setPresentationTime(surface: EGLSurface, nsecs: Long) =
+        EGLExt.eglPresentationTimeANDROID(display, surface, nsecs)
 
     fun swapBuffers(surface: EGLSurface) {
         EGL14.eglSwapBuffers(display, surface)

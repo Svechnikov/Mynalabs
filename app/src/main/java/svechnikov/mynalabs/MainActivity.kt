@@ -94,9 +94,15 @@ class MainActivity : AppCompatActivity() {
             this,
             surface,
             ::adjustPreviewSize,
+            ::onVideoRecorded,
         ).also { this.recorder = it }
 
         recorderTouchHandler = RecorderTouchHandler(recorder)
+    }
+
+    private fun onVideoRecorded(path: String) {
+        recorder?.destroy()
+        recorder = null
     }
 
     private fun adjustPreviewSize(frameSize: Size): Size {

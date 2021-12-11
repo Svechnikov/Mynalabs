@@ -7,7 +7,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
 
-class TextureProgram {
+class CameraTextureProgram {
 
     private val program: Int
 
@@ -15,17 +15,16 @@ class TextureProgram {
     private val uTexMatrixLoc: Int
     private val aPositionLoc: Int
     private val aTextureCoordLoc: Int
-    val texId: Int
 
     init {
         val vertexShader = loadShader(GLES20.GL_VERTEX_SHADER, VERTEX_SHADER)
         val fragmentShader = loadShader(GLES20.GL_FRAGMENT_SHADER, FRAGMENT_SHADER)
         program = GLES20.glCreateProgram()
-        checkGlError("glCreateProgram")
+        Utils.checkGlError("glCreateProgram")
         GLES20.glAttachShader(program, vertexShader)
-        checkGlError("glAttachShader")
+        Utils.checkGlError("glAttachShader")
         GLES20.glAttachShader(program, fragmentShader)
-        checkGlError("glAttachShader")
+        Utils.checkGlError("glAttachShader")
         GLES20.glLinkProgram(program)
         val linkStatus = IntArray(1)
         GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, linkStatus, 0)
@@ -37,40 +36,14 @@ class TextureProgram {
         aTextureCoordLoc = getAttribLocation("aTextureCoord")
         uMVPMatrixLoc = getUniformLocation("uMVPMatrix")
         uTexMatrixLoc = getUniformLocation("uTexMatrix")
-
-        val textures = IntArray(1)
-        GLES20.glGenTextures(1, textures, 0)
-        checkGlError("glGenTextures")
-
-        texId = textures[0]
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, texId)
-        checkGlError("glBindTexture $texId")
-
-        GLES20.glTexParameteri(
-            GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MIN_FILTER,
-            GLES20.GL_NEAREST
-        )
-        GLES20.glTexParameteri(
-            GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MAG_FILTER,
-            GLES20.GL_LINEAR
-        )
-        GLES20.glTexParameteri(
-            GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_S,
-            GLES20.GL_CLAMP_TO_EDGE
-        )
-        GLES20.glTexParameteri(
-            GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T,
-            GLES20.GL_CLAMP_TO_EDGE
-        )
-        checkGlError("glTexParameter")
     }
 
-    fun draw(transformMatrix: FloatArray) {
-        checkGlError("draw start")
+    fun draw(texId: Int, transformMatrix: FloatArray) {
+        Utils.checkGlError("draw start")
 
         // Select the program.
         GLES20.glUseProgram(program)
-        checkGlError("glUseProgram")
+        Utils.checkGlError("glUseProgram")
 
         // Set the texture.
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
@@ -78,36 +51,36 @@ class TextureProgram {
 
         // Copy the model / view / projection matrix over.
         GLES20.glUniformMatrix4fv(uMVPMatrixLoc, 1, false, IDENTITY_MATRIX, 0)
-        checkGlError("glUniformMatrix4fv")
+        Utils.checkGlError("glUniformMatrix4fv")
 
         // Copy the texture transformation matrix over.
         GLES20.glUniformMatrix4fv(uTexMatrixLoc, 1, false, transformMatrix, 0)
-        checkGlError("glUniformMatrix4fv")
+        Utils.checkGlError("glUniformMatrix4fv")
 
         // Enable the "aPosition" vertex attribute.
         GLES20.glEnableVertexAttribArray(aPositionLoc)
-        checkGlError("glEnableVertexAttribArray")
+        Utils.checkGlError("glEnableVertexAttribArray")
 
         // Connect vertexBuffer to "aPosition".
         GLES20.glVertexAttribPointer(
             aPositionLoc, 2,
             GLES20.GL_FLOAT, false, 2 * SIZE_OF_FLOAT, VERTEX_BUFFER)
-        checkGlError("glVertexAttribPointer")
+        Utils.checkGlError("glVertexAttribPointer")
 
         // Enable the "aTextureCoord" vertex attribute.
         GLES20.glEnableVertexAttribArray(aTextureCoordLoc)
-        checkGlError("glEnableVertexAttribArray")
+        Utils.checkGlError("glEnableVertexAttribArray")
 
         // Connect texBuffer to "aTextureCoord".
         GLES20.glVertexAttribPointer(
             aTextureCoordLoc, 2,
             GLES20.GL_FLOAT, false, 2 * SIZE_OF_FLOAT, TEX_BUFFER
         )
-        checkGlError("glVertexAttribPointer")
+        Utils.checkGlError("glVertexAttribPointer")
 
         // Draw the rect.
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
-        checkGlError("glDrawArrays")
+        Utils.checkGlError("glDrawArrays")
 
         // Done -- disable vertex array, texture, and program.
         GLES20.glDisableVertexAttribArray(aPositionLoc)
@@ -134,7 +107,7 @@ class TextureProgram {
 
     private fun loadShader(type: Int, source: String): Int {
         val shader = GLES20.glCreateShader(type)
-        checkGlError("glCreateShader type=$type")
+        Utils.checkGlError("glCreateShader type=$type")
 
         GLES20.glShaderSource(shader, source)
         GLES20.glCompileShader(shader)
@@ -145,13 +118,6 @@ class TextureProgram {
             throw RuntimeException(GLES20.glGetShaderInfoLog(shader))
         }
         return shader
-    }
-
-    private fun checkGlError(op: String) {
-        val error = GLES20.glGetError()
-        if (error != GLES20.GL_NO_ERROR) {
-            throw RuntimeException("$op: glError 0x${Integer.toHexString(error)}")
-        }
     }
 
     private companion object {
