@@ -11,10 +11,12 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.ExperimentalUseCaseGroup
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import java.io.IOException
+import java.lang.RuntimeException
 import kotlin.math.min
 import kotlin.math.round
 
@@ -38,6 +40,8 @@ class MainActivity : AppCompatActivity() {
     private var mediaPlayer: MediaPlayer? = null
 
     private lateinit var vibrator: Vibrator
+
+    private var permissionsDialogShowing = false
 
     private val previewSurfaceCallback = object : SurfaceHolder.Callback {
         override fun surfaceCreated(holder: SurfaceHolder) {
@@ -74,7 +78,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkSurfaceAndPermissions() {
-        if (allPermissionsGranted() && surface != null) {
+        if (!allPermissionsGranted()) {
+            if (!permissionsDialogShowing) {
+                permissionsDialogShowing = true
+                ActivityCompat.requestPermissions(
+                    this,
+                    REQUIRED_PERMISSIONS,
+                    REQUEST_CODE_PERMISSIONS,
+                )
+            }
+        } else if (surface != null) {
             if (state == State.RequestingPermissions) {
                 state = State.ShowingPreview
             }
@@ -118,6 +131,7 @@ class MainActivity : AppCompatActivity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        permissionsDialogShowing = false
         if (requestCode == REQUEST_CODE_PERMISSIONS) {
             if (allPermissionsGranted()) {
                 checkSurfaceAndPermissions()
