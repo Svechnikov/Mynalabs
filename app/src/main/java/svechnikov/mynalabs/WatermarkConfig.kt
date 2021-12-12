@@ -8,5 +8,5 @@ object WatermarkConfig {
     const val PULSE_FREQUENCY = 1f
 
     // Opacity change at extrema
-    const val PULSE_AMPLITUDE = 0.2f
+    const val PULSE_AMPLITUDE = 0.6f
 }
