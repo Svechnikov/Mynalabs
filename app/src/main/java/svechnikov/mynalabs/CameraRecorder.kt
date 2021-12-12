@@ -145,7 +145,7 @@ class CameraRecorder(
                 val period = 1 / WatermarkConfig.PULSE_FREQUENCY * 1000
                 val halfPeriod = period / 2
                 val progress = (timeSinceStart % halfPeriod) / halfPeriod
-                val alpha = 1 - WatermarkConfig.PULSE_AMPLITUDE * sin(progress * Math.PI).toFloat()
+                val alpha = WatermarkConfig.PULSE_AMPLITUDE * sin(progress * Math.PI).toFloat()
 
                 eglCore.makeCurrent(it)
                 GLES20.glViewport(0, 0, frameSize.width, frameSize.height)
