@@ -150,7 +150,7 @@ class CameraRecorder(
                 eglCore.makeCurrent(it)
                 GLES20.glViewport(0, 0, frameSize.width, frameSize.height)
                 GLES20.glEnable(GLES20.GL_BLEND)
-                GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+                GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
                 cameraProgram?.draw(texture.texId, transformMatrix)
                 watermarkProgram?.draw(bitmapTexture.texId, alpha)
                 GLES20.glDisable(GLES20.GL_BLEND)
